@@ -92,10 +92,45 @@ cat > /mnt/etc/fstab <<EOF
 proc                    /proc      procfs   rw  0  0
 EOF
 
+# --- Configure network ---
+# User mode networking hands out the same lease every boot, so DHCP has nothing
+# to discover and only adds a race: dhclient's default `dhclient_flags="-w"`
+# daemonizes before the exchange finishes, so nothing in boot waits for the
+# network and the first thing the consumer runs can find it missing. Freeze the
+# lease this live CD was given, read from the running system so the image keeps
+# whatever the hypervisor hands out. Leaving out the DHCP keyword is all it
+# takes to stop the client -- network.subr's dhcpif() starts one only for an
+# interface that asks for it.
+# See https://github.com/cross-platform-actions/action/issues/164.
+interface=$(route -n get default | awk '$1 == "interface:" { print $2; exit }')
+gateway=$(route -n get default | awk '$1 == "gateway:" { print $2; exit }')
+
+# DragonFly prints "inet 10.0.2.15 netmask 0xffffff00 broadcast 10.0.2.255".
+# The leading phrase is already valid as ifconfig arguments, so pass through
+# what this release printed rather than reformatting it. Matching on "netmask"
+# doubles as a format check: another layout yields nothing and trips the guard.
+address=$(ifconfig "$interface" inet |
+  awk '$1 == "inet" && $3 == "netmask" { print $1, $2, $3, $4; exit }')
+
+nameservers=$(awk '$1 == "nameserver" { print }' /etc/resolv.conf)
+
+# An empty value here would ship an image that never becomes reachable, and the
+# only symptom would be the consumer's SSH timing out much later. Fail the build
+# while the reason is still on screen. One test per line: `set -e` ignores a
+# failing command anywhere but the end of an `&&` list, so a chained guard would
+# never fire.
+[ -n "$interface" ]
+[ -n "$gateway" ]
+[ -n "$address" ]
+[ -n "$nameservers" ]
+
+echo "$nameservers" > /mnt/etc/resolv.conf
+
 # --- Configure rc.conf ---
 cat > /mnt/etc/rc.conf <<EOF
 hostname="dragonflybsd"
-ifconfig_vtnet0="DHCP"
+ifconfig_${interface}="${address}"
+defaultrouter="${gateway}"
 tmpfs_tmp="YES"
 tmpfs_var_run="YES"
 sshd_enable="YES"
