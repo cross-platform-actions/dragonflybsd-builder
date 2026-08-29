@@ -71,7 +71,7 @@ jobs:
         run: echo 'host to guest' > host_to_guest.txt
 
       - name: Test Image
-        uses: cross-platform-actions/action@dragonfly-bsd
+        uses: cross-platform-actions/action@master
         with:
           operating_system: dragonflybsd
           architecture: ${{ matrix.architecture.name }}
@@ -97,6 +97,15 @@ jobs:
             [ "`uname -m`" = '${{ matrix.architecture.uname || matrix.architecture.name }}' ] || [ "`uname -p`" = '${{ matrix.architecture.uname || matrix.architecture.name }}' ]
             [ "`pwd`" = '/home/runner/work/dragonflybsd-builder/dragonflybsd-builder' ]
             [ "`hostname`" = 'runnervmg1sw1.local' ]
+            # The image configures the interface statically, so no DHCP
+            # client runs at all and the routing table is whatever rc.conf
+            # asked for. A client reappearing here is the regression.
+            ! pgrep -q dhclient
+            ! pgrep -q dhcpcd
+            [ "`netstat -rn -f inet | grep -c '^default'`" -eq 1 ]
+            # The failure this guards against reached the gateway and
+            # nothing beyond it, so resolve and fetch something remote.
+            fetch -q -o /dev/null http://mirror-master.dragonflybsd.org/
             cat host_to_guest.txt | grep -q 'host to guest'
             echo 'guest to host' > guest_to_host.txt
 
