@@ -15,4 +15,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release with DragonFly BSD 6.4.2 x86-64 support
 
+[Unreleased]: https://github.com/cross-platform-actions/dragonflybsd-builder/compare/v0.0.1...HEAD
 [0.0.1]: https://github.com/cross-platform-actions/dragonflybsd-builder/releases/tag/v0.0.1
